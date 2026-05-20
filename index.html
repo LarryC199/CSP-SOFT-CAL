@@ -778,9 +778,21 @@ function renderTasks(panel){
         const card=el('div',{class:'task-card'});
         const ra=el('div',{style:'display:flex;flex-direction:column;gap:2px;flex-shrink:0'});
         const up=el('button',{class:'btn-sm',style:'padding:2px 7px;font-size:11px'},'▲');
-        up.onclick=()=>{if(gi>0){[state.tasks[gi-1],state.tasks[gi]]=[state.tasks[gi],state.tasks[gi-1]];saveTasks().then(()=>render());}};
+        up.onclick=()=>{
+          const i=state.tasks.findIndex(x=>x.id===t.id);
+          if(i>0){
+            const tmp=state.tasks[i-1];state.tasks[i-1]=state.tasks[i];state.tasks[i]=tmp;
+            render();saveTasks();
+          }
+        };
         const dn=el('button',{class:'btn-sm',style:'padding:2px 7px;font-size:11px'},'▼');
-        dn.onclick=()=>{if(gi<state.tasks.length-1){[state.tasks[gi+1],state.tasks[gi]]=[state.tasks[gi],state.tasks[gi+1]];saveTasks().then(()=>render());}};
+        dn.onclick=()=>{
+          const i=state.tasks.findIndex(x=>x.id===t.id);
+          if(i<state.tasks.length-1){
+            const tmp=state.tasks[i+1];state.tasks[i+1]=state.tasks[i];state.tasks[i]=tmp;
+            render();saveTasks();
+          }
+        };
         ra.appendChild(up);ra.appendChild(dn);card.appendChild(ra);
         const info=el('div',{class:'task-card-info'});
         info.appendChild(el('div',{class:'task-card-name'},t.name));
