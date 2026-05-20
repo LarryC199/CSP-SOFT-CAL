@@ -1,0 +1,859 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ops Calendar</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+/* ── RESET & BASE ───────────────────────────────────────────── */
+*{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --bg:#f8f7f4;--bg2:#ffffff;--bg3:#f0efe9;
+  --text:#1a1a18;--text2:#5a5a56;--text3:#9a9a94;
+  --border:rgba(0,0,0,.1);--border2:rgba(0,0,0,.18);
+  --accent:#1a6b4a;--accent-bg:#e8f5ee;--accent-text:#0f4a32;
+  --blue-bg:#e8f0fb;--blue-text:#1a3a7a;
+  --red-bg:#fceaea;--red-text:#7a1a1a;
+  --amber-bg:#fdf3e0;--amber-text:#7a4a0a;
+  --purple-bg:#f0eefa;--purple-text:#3a1a7a;
+  --pink-bg:#fceaf4;--pink-text:#7a1a4a;
+  --green-bg:#e8f5e8;--green-text:#1a5a1a;
+  --teal-bg:#e8f5f2;--teal-text:#0f4a3a;
+  --gray-bg:#f0f0ec;--gray-text:#3a3a36;
+  --radius:8px;--radius-lg:12px;--radius-xl:16px;
+  --shadow:0 1px 3px rgba(0,0,0,.06);
+  --font:'DM Sans',system-ui,sans-serif;
+  --font-mono:'DM Mono',monospace;
+}
+@media(prefers-color-scheme:dark){
+  :root{
+    --bg:#141412;--bg2:#1e1e1c;--bg3:#252522;
+    --text:#e8e8e2;--text2:#9a9a92;--text3:#5a5a54;
+    --border:rgba(255,255,255,.1);--border2:rgba(255,255,255,.18);
+    --accent:#2d9e6a;--accent-bg:#0f2e1e;--accent-text:#6dd4a0;
+    --blue-bg:#0f1e3a;--blue-text:#7aaaf0;
+    --red-bg:#2e0f0f;--red-text:#f07a7a;
+    --amber-bg:#2e1e0f;--amber-text:#f0b87a;
+    --purple-bg:#1e0f2e;--purple-text:#b87af0;
+    --pink-bg:#2e0f1e;--pink-text:#f07ab8;
+    --green-bg:#0f2e0f;--green-text:#7af07a;
+    --teal-bg:#0f2e26;--teal-text:#7af0d4;
+    --gray-bg:#1e1e1a;--gray-text:#c0c0b8;
+  }
+}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px;line-height:1.5;}
+
+/* ── LAYOUT ─────────────────────────────────────────────────── */
+.app{display:flex;flex-direction:column;height:100vh;max-width:900px;margin:0 auto;}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:0 1.25rem;background:var(--bg2);border-bottom:0.5px solid var(--border);height:52px;flex-shrink:0;}
+.app-title{font-size:15px;font-weight:500;letter-spacing:-.01em;}
+.app-title span{color:var(--accent);}
+.sync-status{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text3);}
+.sync-dot{width:6px;height:6px;border-radius:50%;background:var(--text3);}
+.sync-dot.ok{background:var(--accent);}
+.sync-dot.err{background:#e24b4a;}
+.sync-dot.syncing{background:#BA7517;animation:pulse 1s ease-in-out infinite;}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.tab-bar{display:flex;border-bottom:0.5px solid var(--border);background:var(--bg2);padding:0 1.25rem;flex-shrink:0;}
+.tab{padding:10px 16px;cursor:pointer;font-size:13px;font-weight:500;color:var(--text2);border-bottom:2px solid transparent;white-space:nowrap;transition:color .15s;}
+.tab:hover{color:var(--text);}
+.tab.active{color:var(--text);border-bottom-color:var(--accent);}
+.panel{flex:1;overflow-y:auto;padding:1.25rem;}
+
+/* ── FILTERS ────────────────────────────────────────────────── */
+.filter-section{margin-bottom:12px;display:flex;flex-direction:column;gap:6px;}
+.filter-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+.filter-label{font-size:10px;font-weight:500;color:var(--text3);min-width:54px;text-transform:uppercase;letter-spacing:.06em;}
+.chip{font-size:11px;padding:3px 9px;border-radius:20px;cursor:pointer;border:0.5px solid var(--border);background:var(--bg3);color:var(--text2);white-space:nowrap;transition:all .12s;}
+.chip:hover{border-color:var(--border2);color:var(--text);}
+.chip.active{background:var(--text);color:var(--bg);border-color:transparent;}
+.chip.cat-active{color:var(--bg);border-color:transparent;}
+
+/* ── CALENDAR ───────────────────────────────────────────────── */
+.cal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;}
+.cal-title{font-size:16px;font-weight:500;}
+.cal-nav{display:flex;gap:6px;flex-wrap:wrap;}
+.btn-sm{background:var(--bg3);border:0.5px solid var(--border);border-radius:var(--radius);padding:4px 10px;cursor:pointer;font-size:12px;color:var(--text);font-family:var(--font);transition:background .12s;}
+.btn-sm:hover{background:var(--bg2);border-color:var(--border2);}
+.summary-bar{display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;}
+.stat-card{background:var(--bg2);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:10px 14px;}
+.stat-num{font-size:20px;font-weight:500;}
+.stat-label{font-size:11px;color:var(--text2);margin-top:2px;}
+.month-block{margin-bottom:6px;border:0.5px solid var(--border);border-radius:var(--radius-xl);overflow:hidden;background:var(--bg2);}
+.month-hdr{display:flex;align-items:center;justify-content:space-between;padding:8px 14px;cursor:pointer;background:var(--bg3);transition:background .12s;}
+.month-hdr:hover{background:var(--bg2);}
+.month-name{font-weight:500;font-size:13px;}
+.month-meta{display:flex;align-items:center;gap:8px;}
+.prog-wrap{width:56px;height:3px;background:var(--border);border-radius:2px;overflow:hidden;}
+.prog-fill{height:100%;background:var(--accent);border-radius:2px;transition:width .3s;}
+.prog-txt{font-size:11px;color:var(--text3);}
+.chev{font-size:10px;color:var(--text3);transition:transform .2s;}
+.chev.open{transform:rotate(180deg);}
+.week-block{border-top:0.5px solid var(--border);}
+.week-hdr{display:flex;align-items:center;justify-content:space-between;padding:4px 14px;cursor:pointer;background:var(--bg2);transition:background .12s;}
+.week-hdr:hover{background:var(--bg3);}
+.week-title{font-size:11px;font-weight:500;color:var(--text2);display:flex;align-items:center;gap:6px;}
+.now-badge{font-size:9px;background:var(--accent);color:#fff;border-radius:10px;padding:1px 6px;letter-spacing:.02em;}
+.week-meta{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text3);}
+.week-done{color:var(--accent);}
+.day-section{border-top:0.5px solid var(--border);}
+.day-hdr{display:flex;align-items:center;gap:8px;padding:3px 14px;background:var(--bg3);border-bottom:0.5px solid var(--border);}
+.day-name{font-size:11px;font-weight:500;color:var(--text2);min-width:82px;}
+.day-date{font-size:11px;color:var(--text3);}
+.day-done{font-size:11px;color:var(--accent);margin-left:auto;}
+.day-tasks{padding:2px 0 3px;}
+
+/* ── TASK ROW ───────────────────────────────────────────────── */
+.task-row{display:flex;align-items:center;gap:6px;padding:2px 14px 2px 6px;border-radius:5px;transition:background .1s;}
+.task-row:hover{background:var(--bg3);}
+.task-row.drag-over{border-top:2px solid var(--accent);}
+.task-row.dragging{opacity:.3;}
+.drag-handle{cursor:grab;display:flex;flex-direction:column;gap:2px;flex-shrink:0;opacity:0;padding:0 4px;}
+.task-row:hover .drag-handle{opacity:1;}
+.drag-handle:active{cursor:grabbing;}
+.drag-dot-row{display:flex;gap:2px;}
+.drag-dot{width:2.5px;height:2.5px;border-radius:50%;background:var(--text3);}
+.task-check{width:14px;height:14px;border-radius:3px;border:1.5px solid var(--border2);cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:all .12s;}
+.task-check.checked{background:var(--accent);border-color:var(--accent);}
+.task-check.checked::after{content:'✓';color:#fff;font-size:8px;font-weight:700;}
+.task-label{flex:1;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.task-label.done{text-decoration:line-through;color:var(--text3);}
+.cat-pill{font-size:10px;padding:1px 6px;border-radius:10px;white-space:nowrap;flex-shrink:0;}
+.task-site{font-size:10px;color:var(--text3);white-space:nowrap;}
+.task-assignee{font-size:10px;color:var(--text3);white-space:nowrap;}
+.task-edit-btn,.sop-btn{font-size:10px;padding:1px 5px;border-radius:4px;background:none;border:0.5px solid var(--border);cursor:pointer;color:var(--text3);white-space:nowrap;font-family:var(--font);opacity:0;transition:all .1s;}
+.task-row:hover .task-edit-btn,.task-row:hover .sop-btn{opacity:1;}
+.task-edit-btn:hover,.sop-btn:hover{background:var(--bg3);color:var(--text);border-color:var(--border2);}
+
+/* ── INLINE EDIT ────────────────────────────────────────────── */
+.ie-row{background:var(--bg3);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:8px 12px;margin:3px 8px;display:flex;flex-wrap:wrap;gap:6px;align-items:center;}
+.ie-row input,.ie-row select{padding:4px 8px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text);font-size:12px;font-family:var(--font);}
+.ie-row input{flex:1;min-width:120px;}
+.ie-save{background:var(--text);color:var(--bg);border:none;border-radius:var(--radius);padding:4px 10px;cursor:pointer;font-size:12px;font-family:var(--font);}
+.ie-cancel{background:none;border:0.5px solid var(--border);border-radius:var(--radius);padding:4px 8px;cursor:pointer;font-size:12px;color:var(--text2);font-family:var(--font);}
+
+/* ── CAT COLORS ─────────────────────────────────────────────── */
+.c-AP{background:var(--blue-bg);color:var(--blue-text);}
+.c-AR{background:var(--teal-bg);color:var(--teal-text);}
+.c-Payroll{background:var(--amber-bg);color:var(--amber-text);}
+.c-Tax{background:var(--red-bg);color:var(--red-text);}
+.c-Reporting{background:var(--purple-bg);color:var(--purple-text);}
+.c-HR{background:var(--pink-bg);color:var(--pink-text);}
+.c-Compliance{background:var(--gray-bg);color:var(--gray-text);}
+.c-Close{background:var(--teal-bg);color:var(--teal-text);}
+.c-Reconciliation{background:var(--blue-bg);color:var(--blue-text);}
+.c-Treasury{background:var(--blue-bg);color:var(--blue-text);}
+.c-Inventory{background:var(--green-bg);color:var(--green-text);}
+.c-General{background:var(--gray-bg);color:var(--gray-text);}
+.c-Comp{background:var(--pink-bg);color:var(--pink-text);}
+.c-Vendor{background:var(--amber-bg);color:var(--amber-text);}
+.chip-AP{background:var(--blue-text);}.chip-AR{background:var(--teal-text);}
+.chip-Payroll{background:var(--amber-text);}.chip-Tax{background:var(--red-text);}
+.chip-Reporting{background:var(--purple-text);}.chip-HR{background:var(--pink-text);}
+.chip-Compliance{background:var(--gray-text);}.chip-Close{background:var(--teal-text);}
+.chip-Reconciliation{background:var(--blue-text);}.chip-Treasury{background:var(--blue-text);}
+.chip-Inventory{background:var(--green-text);}.chip-General{background:var(--gray-text);}
+.chip-Comp{background:var(--pink-text);}.chip-Vendor{background:var(--amber-text);}
+
+/* ── TASKS TAB ──────────────────────────────────────────────── */
+.sec-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
+.sec-title{font-size:16px;font-weight:500;}
+.btn-primary{background:var(--text);color:var(--bg);border:none;border-radius:var(--radius);padding:7px 14px;cursor:pointer;font-size:13px;font-family:var(--font);transition:opacity .12s;}
+.btn-primary:hover{opacity:.85;}
+.btn-danger{background:var(--red-bg);color:var(--red-text);border:none;border-radius:var(--radius);padding:5px 10px;cursor:pointer;font-size:12px;font-family:var(--font);}
+.btn-danger:hover{opacity:.85;}
+.task-card{background:var(--bg2);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:10px 14px;margin-bottom:7px;display:flex;align-items:flex-start;justify-content:space-between;gap:10px;}
+.task-card-info{flex:1;min-width:0;}
+.task-card-name{font-weight:500;font-size:13px;margin-bottom:5px;}
+.badges{display:flex;flex-wrap:wrap;gap:4px;}
+.badge{font-size:11px;padding:2px 7px;border-radius:20px;}
+.badge-gray{background:var(--bg3);color:var(--text2);border:0.5px solid var(--border);}
+.group-lbl{font-size:10px;font-weight:500;color:var(--text3);letter-spacing:.06em;text-transform:uppercase;margin:14px 0 6px;padding-left:2px;}
+.card-acts{display:flex;gap:6px;flex-shrink:0;}
+
+/* ── SOPS TAB ───────────────────────────────────────────────── */
+.sop-card{background:var(--bg2);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:12px 14px;margin-bottom:8px;}
+.sop-card-hdr{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;}
+.sop-name{font-weight:500;font-size:13px;}
+.sop-desc{font-size:12px;color:var(--text2);margin-top:3px;}
+.sop-steps{margin-top:8px;padding-top:8px;border-top:0.5px solid var(--border);}
+.sop-step{display:flex;gap:8px;font-size:12px;padding:3px 0;border-top:0.5px solid var(--border);}
+.sop-step:first-child{border-top:none;}
+.sop-step-num{color:var(--text3);min-width:16px;}
+.empty-state{text-align:center;padding:3rem 1rem;color:var(--text2);font-size:13px;}
+.empty-state p{margin-top:6px;font-size:12px;color:var(--text3);}
+
+/* ── MODAL ──────────────────────────────────────────────────── */
+.modal-wrap{min-height:500px;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;padding:1rem;}
+.modal{background:var(--bg2);border-radius:var(--radius-xl);border:0.5px solid var(--border);padding:1.5rem;width:100%;max-width:480px;max-height:88vh;overflow-y:auto;box-shadow:var(--shadow);}
+.modal-title{font-size:16px;font-weight:500;margin-bottom:1rem;}
+.form-group{margin-bottom:12px;}
+.form-label{font-size:11px;color:var(--text2);margin-bottom:4px;display:block;text-transform:uppercase;letter-spacing:.04em;}
+input[type=text],input[type=number],select,textarea{width:100%;padding:8px 10px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg3);color:var(--text);font-size:13px;font-family:var(--font);transition:border-color .12s;}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);}
+textarea{resize:vertical;min-height:60px;}
+.modal-acts{display:flex;gap:8px;justify-content:flex-end;margin-top:1rem;}
+.btn-cancel{background:var(--bg3);border:0.5px solid var(--border);border-radius:var(--radius);padding:7px 14px;cursor:pointer;font-size:13px;color:var(--text);font-family:var(--font);}
+.steps-list .step-row{display:flex;align-items:center;gap:6px;margin-bottom:5px;}
+.step-num-lbl{font-size:11px;color:var(--text3);min-width:18px;}
+.btn-icon{background:none;border:none;cursor:pointer;color:var(--text3);font-size:16px;padding:2px 4px;transition:color .1s;}
+.btn-icon:hover{color:var(--text);}
+.add-step-btn{font-size:12px;color:var(--text3);cursor:pointer;background:none;border:none;padding:2px 0;display:flex;align-items:center;gap:4px;margin-top:4px;font-family:var(--font);}
+.add-step-btn:hover{color:var(--text);}
+
+/* ── LOADING ────────────────────────────────────────────────── */
+.loading-screen{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;gap:12px;color:var(--text2);}
+.spinner{width:24px;height:24px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+
+<div id="loading-screen" class="loading-screen">
+  <div class="spinner"></div>
+  <span style="font-size:13px;">Connecting to Supabase…</span>
+</div>
+
+<div id="app" class="app" style="display:none"></div>
+
+<script>
+// ── SUPABASE CONFIG ──────────────────────────────────────────
+const SUPABASE_URL = 'https://tjkmdnypqxyicwnuzrio.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRqa21kbnlwcXh5aWN3bnV6cmlvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkzMDQyNTksImV4cCI6MjA5NDg4MDI1OX0.t-cGZ-AC5-RQZXyaEdfBUrUxLqvRdTAr4xIWbVB9u84';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// ── CONSTANTS ────────────────────────────────────────────────
+const ALL_CATS=['AP','AR','Payroll','Tax','Reporting','HR','Compliance','Close','Reconciliation','Treasury','Inventory','General','Comp','Vendor Management'];
+const MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
+const SHORT=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const DAYS=['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+const CAT_KEY=c=>c.replace(/\s+/g,'');
+
+// ── STATE ────────────────────────────────────────────────────
+let state={
+  tasks:[],sops:[],
+  completions:{},  // taskId|dateStr => true
+  dayOrder:{},     // dateStr => [taskId,...]
+  year:new Date().getFullYear(),
+  collapsedMonths:[],collapsedWeeks:{},
+  activeTab:'calendar',
+  filterSite:'all',filterCats:[],
+  syncStatus:'ok' // ok | syncing | err
+};
+let editingInline=null,dragState=null,modalState=null;
+
+// ── SUPABASE SYNC ────────────────────────────────────────────
+async function loadFromSupabase(){
+  try{
+    setSyncStatus('syncing');
+    const [t,s,c,d]=await Promise.all([
+      sb.from('tasks').select('*'),
+      sb.from('sops').select('*'),
+      sb.from('completions').select('*'),
+      sb.from('day_order').select('*')
+    ]);
+    if(t.data&&t.data.length) state.tasks=t.data.map(r=>r.data);
+    if(s.data) state.sops=s.data.map(r=>r.data);
+    if(c.data) c.data.forEach(r=>{state.completions[r.task_id+'|'+r.date_str]=true;});
+    if(d.data) d.data.forEach(r=>{state.dayOrder[r.date_str]=r.task_order;});
+    if(!state.tasks.length) await seedAndSave();
+    setSyncStatus('ok');
+  }catch(e){console.error(e);setSyncStatus('err');}
+}
+
+async function saveTasks(){
+  setSyncStatus('syncing');
+  try{
+    for(const t of state.tasks){
+      await sb.from('tasks').upsert({id:t.id,data:t,updated_at:new Date().toISOString()});
+    }
+    setSyncStatus('ok');
+  }catch(e){console.error(e);setSyncStatus('err');}
+}
+
+async function saveSops(){
+  setSyncStatus('syncing');
+  try{
+    for(const s of state.sops){
+      await sb.from('sops').upsert({id:s.id,data:s,updated_at:new Date().toISOString()});
+    }
+    setSyncStatus('ok');
+  }catch(e){console.error(e);setSyncStatus('err');}
+}
+
+async function toggleCompletion(taskId,dateStr){
+  const k=taskId+'|'+dateStr;
+  const wasComplete=!!state.completions[k];
+  setSyncStatus('syncing');
+  try{
+    if(wasComplete){
+      delete state.completions[k];
+      await sb.from('completions').delete().eq('task_id',taskId).eq('date_str',dateStr);
+    }else{
+      state.completions[k]=true;
+      await sb.from('completions').upsert({task_id:taskId,date_str:dateStr,completed_at:new Date().toISOString()},{onConflict:'task_id,date_str'});
+    }
+    setSyncStatus('ok');
+  }catch(e){console.error(e);setSyncStatus('err');}
+}
+
+async function saveDayOrder(dateStr,order){
+  state.dayOrder[dateStr]=order;
+  setSyncStatus('syncing');
+  try{
+    await sb.from('day_order').upsert({date_str:dateStr,task_order:order,updated_at:new Date().toISOString()},{onConflict:'date_str'});
+    setSyncStatus('ok');
+  }catch(e){console.error(e);setSyncStatus('err');}
+}
+
+function setSyncStatus(s){
+  state.syncStatus=s;
+  const dot=document.getElementById('sync-dot');
+  const txt=document.getElementById('sync-txt');
+  if(!dot)return;
+  dot.className='sync-dot '+s;
+  txt.textContent=s==='ok'?'Synced':s==='syncing'?'Saving…':'Sync error';
+}
+
+// Subscribe to real-time changes from other users
+function subscribeRealtime(){
+  sb.channel('completions-changes')
+    .on('postgres_changes',{event:'*',schema:'public',table:'completions'},(payload)=>{
+      if(payload.eventType==='INSERT'||payload.eventType==='UPDATE'){
+        const r=payload.new;
+        state.completions[r.task_id+'|'+r.date_str]=true;
+      }else if(payload.eventType==='DELETE'){
+        const r=payload.old;
+        delete state.completions[r.task_id+'|'+r.date_str];
+      }
+      render();
+    })
+    .on('postgres_changes',{event:'*',schema:'public',table:'day_order'},(payload)=>{
+      if(payload.new) state.dayOrder[payload.new.date_str]=payload.new.task_order;
+      render();
+    })
+    .on('postgres_changes',{event:'*',schema:'public',table:'tasks'},(payload)=>{
+      if(payload.new){
+        const idx=state.tasks.findIndex(t=>t.id===payload.new.id);
+        if(idx>=0) state.tasks[idx]=payload.new.data;
+        else state.tasks.push(payload.new.data);
+      }
+      render();
+    })
+    .subscribe();
+}
+
+// ── DATE HELPERS ─────────────────────────────────────────────
+function getWeeks(year){
+  const wks=[];let d=new Date(year,0,1);
+  while(d.getDay()!==1)d.setDate(d.getDate()-1);
+  let n=1;
+  while(true){
+    const start=new Date(d),end=new Date(d);end.setDate(end.getDate()+6);
+    const thu=new Date(d);thu.setDate(thu.getDate()+3);
+    if(thu.getFullYear()>year)break;
+    const days=[];for(let i=0;i<7;i++){const dd=new Date(d);dd.setDate(dd.getDate()+i);days.push(dd);}
+    wks.push({num:n,start,end,month:thu.getMonth(),days});
+    d.setDate(d.getDate()+7);n++;
+  }
+  return wks;
+}
+const ds=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+const fmt=d=>SHORT[d.getMonth()]+' '+d.getDate();
+const isWD=d=>d.getDay()>=1&&d.getDay()<=5;
+function getCurWeek(year){
+  const t=new Date();if(t.getFullYear()!==year)return null;
+  for(const w of getWeeks(year))if(t>=w.start&&t<=w.end)return w.num;
+  return null;
+}
+
+// ── RECURRENCE ───────────────────────────────────────────────
+function occurs(task,day,week){
+  const r=task.recurrence;if(!r)return false;
+  if(r.type==='daily')return isWD(day);
+  if(r.type==='weekly')return ds(day)===ds(week.days[0]);
+  if(r.type==='biweekly')return ds(day)===ds(week.days[0])&&week.num%2===(r.offset||1)%2;
+  if(r.type==='monthly'){
+    const dom=day.getDate(),last=new Date(day.getFullYear(),day.getMonth()+1,0).getDate();
+    if(r.monthDay==='last')return dom===last;
+    if(r.monthDay==='first')return dom===1;
+    return dom===(parseInt(r.monthDay)||1);
+  }
+  if(r.type==='quarterly'){
+    if(![0,3,6,9].includes(day.getMonth()))return false;
+    const dom=day.getDate(),last=new Date(day.getFullYear(),day.getMonth()+1,0).getDate();
+    return r.qDay==='last'?dom===last:dom===1;
+  }
+  if(r.type==='annually')return day.getMonth()===(parseInt(r.annualMonth)||0)&&day.getDate()===(parseInt(r.annualDay)||1);
+  return false;
+}
+const passFilt=t=>(state.filterSite==='all'||t.site===state.filterSite)&&(state.filterCats.length===0||state.filterCats.includes(t.category));
+const isComp=(tid,d)=>!!state.completions[tid+'|'+d];
+
+function orderedDay(raw,dateStr){
+  const ord=state.dayOrder[dateStr];if(!ord)return raw;
+  const map=Object.fromEntries(raw.map(t=>[t.id,t]));
+  return [...ord.filter(id=>map[id]).map(id=>map[id]),...raw.filter(t=>!ord.includes(t.id))];
+}
+
+// ── SEED DATA ────────────────────────────────────────────────
+async function seedAndSave(){
+  state.tasks=[
+    {id:'d1',name:'AR follow-up / customer reminders',category:'AR',recurrence:{type:'daily'},site:'CSP',assignee:'',sopUrl:''},
+    {id:'d2',name:'Finance email review',category:'General',recurrence:{type:'daily'},site:'CSP',assignee:'',sopUrl:''},
+    {id:'d3',name:'Review bank balances',category:'Treasury',recurrence:{type:'daily'},site:'CSP',assignee:'',sopUrl:''},
+    {id:'d4',name:'Approve time-off requests',category:'HR',recurrence:{type:'daily'},site:'CSP',assignee:'',sopUrl:''},
+    {id:'d5',name:'Allocate incoming inventory',category:'Inventory',recurrence:{type:'daily'},site:'CSP',assignee:'',sopUrl:''},
+    {id:'d6',name:'Pay bills (rolling)',category:'AP',recurrence:{type:'daily'},site:'CSP',assignee:'',sopUrl:''},
+    {id:'d7',name:'Create invoices',category:'AR',recurrence:{type:'daily'},site:'CSP',assignee:'',sopUrl:''},
+    {id:'d8',name:'Enter bills in QBO',category:'AP',recurrence:{type:'daily'},site:'CSP',assignee:'',sopUrl:''},
+    {id:'d9',name:'Deposit pickup',category:'AR',recurrence:{type:'daily'},site:'CSP',assignee:'',sopUrl:''},
+    {id:'d10',name:'Check deposits – mobile & cash',category:'AR',recurrence:{type:'daily'},site:'CSP',assignee:'',sopUrl:''},
+    {id:'d11',name:'Approve ACH & wires',category:'AP',recurrence:{type:'daily'},site:'CSP',assignee:'',sopUrl:''},
+    {id:'d12',name:'Positive Pay – approve checks',category:'AP',recurrence:{type:'daily'},site:'CSP',assignee:'',sopUrl:''},
+    {id:'bw1',name:'Payroll audit (pre/post) – CSP',category:'Payroll',recurrence:{type:'biweekly',offset:1},site:'CSP',assignee:'',sopUrl:''},
+    {id:'bw2',name:'401k submission – CSP',category:'Payroll',recurrence:{type:'biweekly',offset:1},site:'CSP',assignee:'',sopUrl:''},
+    {id:'bw3',name:'Update time clock / timesheets – CSP',category:'Payroll',recurrence:{type:'biweekly',offset:1},site:'CSP',assignee:'',sopUrl:''},
+    {id:'bw4',name:'Payroll submission – CSP',category:'Payroll',recurrence:{type:'biweekly',offset:1},site:'CSP',assignee:'',sopUrl:''},
+    {id:'m1',name:'Pay Cleaning services – CSL2',category:'AP',recurrence:{type:'monthly',monthDay:'1'},site:'CSL2',assignee:'Lee',sopUrl:''},
+    {id:'m2',name:'Pay Alarm/Security – CSL2',category:'AP',recurrence:{type:'monthly',monthDay:'1'},site:'CSL2',assignee:'Lee',sopUrl:''},
+    {id:'m3',name:'Pay Internet provider – CSL2',category:'AP',recurrence:{type:'monthly',monthDay:'1'},site:'CSL2',assignee:'Lee',sopUrl:''},
+    {id:'m4',name:'Pay Water & Sewer – CSL2',category:'AP',recurrence:{type:'monthly',monthDay:'1'},site:'CSL2',assignee:'Lee',sopUrl:''},
+    {id:'m5',name:'Pay Trash removal – CSL2',category:'AP',recurrence:{type:'monthly',monthDay:'1'},site:'CSL2',assignee:'Lee',sopUrl:''},
+    {id:'m6',name:'Pay Comcast – CSL2',category:'AP',recurrence:{type:'monthly',monthDay:'1'},site:'CSL2',assignee:'Lee',sopUrl:''},
+    {id:'m7',name:'Pay National Grid – CSL2',category:'AP',recurrence:{type:'monthly',monthDay:'1'},site:'CSL2',assignee:'Lee',sopUrl:''},
+    {id:'m8',name:'Pay Eversource – CSL2',category:'AP',recurrence:{type:'monthly',monthDay:'1'},site:'CSL2',assignee:'Lee',sopUrl:''},
+    {id:'m9',name:'Pay Cleaning services – CSL1',category:'AP',recurrence:{type:'monthly',monthDay:'1'},site:'CSL1',assignee:'Lee',sopUrl:''},
+    {id:'m10',name:'Pay Alarm/Security – CSL1',category:'AP',recurrence:{type:'monthly',monthDay:'1'},site:'CSL1',assignee:'Lee',sopUrl:''},
+    {id:'m11',name:'Pay Internet provider – CSL1',category:'AP',recurrence:{type:'monthly',monthDay:'1'},site:'CSL1',assignee:'Lee',sopUrl:''},
+    {id:'m12',name:'Pay Water & Sewer – CSL1',category:'AP',recurrence:{type:'monthly',monthDay:'1'},site:'CSL1',assignee:'Lee',sopUrl:''},
+    {id:'m13',name:'Pay Trash removal – CSL1',category:'AP',recurrence:{type:'monthly',monthDay:'1'},site:'CSL1',assignee:'Lee',sopUrl:''},
+    {id:'m14',name:'Pay Comcast – CSL1',category:'AP',recurrence:{type:'monthly',monthDay:'1'},site:'CSL1',assignee:'Lee',sopUrl:''},
+    {id:'m15',name:'Pay National Grid – CSL1',category:'AP',recurrence:{type:'monthly',monthDay:'1'},site:'CSL1',assignee:'Lee',sopUrl:''},
+    {id:'m16',name:'Pay Eversource – CSL1',category:'AP',recurrence:{type:'monthly',monthDay:'1'},site:'CSL1',assignee:'Lee',sopUrl:''},
+    {id:'m17',name:'Review Citizens Bank fees – CSP',category:'AP',recurrence:{type:'monthly',monthDay:'1'},site:'CSP',assignee:'',sopUrl:''},
+    {id:'m18',name:'Review QuickBooks Online subscription – CSP',category:'AP',recurrence:{type:'monthly',monthDay:'1'},site:'CSP',assignee:'',sopUrl:''},
+    {id:'m19',name:'Review Google Workspace billing – CSP',category:'AP',recurrence:{type:'monthly',monthDay:'1'},site:'CSP',assignee:'',sopUrl:''},
+    {id:'m20',name:'Pay AT&T – CSP',category:'AP',recurrence:{type:'monthly',monthDay:'1'},site:'CSP',assignee:'',sopUrl:''},
+    {id:'m21',name:'Pay UPS – CSP',category:'AP',recurrence:{type:'monthly',monthDay:'1'},site:'CSP',assignee:'',sopUrl:''},
+    {id:'m22',name:'Pay FedEx – CSP',category:'AP',recurrence:{type:'monthly',monthDay:'1'},site:'CSP',assignee:'',sopUrl:''},
+    {id:'m23',name:'Pay USPS – CSP',category:'AP',recurrence:{type:'monthly',monthDay:'1'},site:'CSP',assignee:'',sopUrl:''},
+    {id:'m24',name:'Pay Staples – CSP',category:'AP',recurrence:{type:'monthly',monthDay:'1'},site:'CSP',assignee:'',sopUrl:''},
+    {id:'m25',name:'Pay WB Mason – CSP',category:'AP',recurrence:{type:'monthly',monthDay:'1'},site:'CSP',assignee:'',sopUrl:''},
+    {id:'m26',name:'Pay Comcast – CSP',category:'AP',recurrence:{type:'monthly',monthDay:'1'},site:'CSP',assignee:'',sopUrl:''},
+    {id:'m27',name:'Pay Harvard Pilgrim – CSP',category:'AP',recurrence:{type:'monthly',monthDay:'1'},site:'CSP',assignee:'',sopUrl:''},
+    {id:'m28',name:'Pay Guardian – CSP',category:'AP',recurrence:{type:'monthly',monthDay:'1'},site:'CSP',assignee:'',sopUrl:''},
+    {id:'m29',name:'Monthly recurring charge review – CSP',category:'AP',recurrence:{type:'monthly',monthDay:'1'},site:'CSP',assignee:'',sopUrl:''},
+    {id:'m30',name:'QBO month-end close checklist – CSP',category:'Close',recurrence:{type:'monthly',monthDay:'last'},site:'CSP',assignee:'',sopUrl:''},
+    {id:'m31',name:'Credit card statement review – CSP',category:'AP',recurrence:{type:'monthly',monthDay:'last'},site:'CSP',assignee:'',sopUrl:''},
+    {id:'m32',name:'Lease payments – CSP',category:'AP',recurrence:{type:'monthly',monthDay:'last'},site:'CSP',assignee:'',sopUrl:''},
+    {id:'m33',name:'Consignment reports – CSP',category:'Reporting',recurrence:{type:'monthly',monthDay:'last'},site:'CSP',assignee:'',sopUrl:''},
+    {id:'m34',name:'Commission logs – CSP',category:'Comp',recurrence:{type:'monthly',monthDay:'last'},site:'CSP',assignee:'',sopUrl:''},
+    {id:'m35',name:'Bank reconciliation – CSP',category:'Reconciliation',recurrence:{type:'monthly',monthDay:'last'},site:'CSP',assignee:'',sopUrl:''},
+    {id:'q1',name:'Quarterly financial package review – CSP',category:'Reporting',recurrence:{type:'quarterly',qDay:'last'},site:'CSP',assignee:'',sopUrl:''},
+    {id:'q2',name:'Workers comp audit prep – CSP',category:'Compliance',recurrence:{type:'quarterly',qDay:'last'},site:'CSP',assignee:'',sopUrl:''},
+    {id:'q3',name:'Quarterly payroll tax review – CSP',category:'Tax',recurrence:{type:'quarterly',qDay:'last'},site:'CSP',assignee:'',sopUrl:''},
+    {id:'q4',name:'City of Watertown tax – CSP',category:'Tax',recurrence:{type:'quarterly',qDay:'last'},site:'CSP',assignee:'',sopUrl:''},
+    {id:'q5',name:'Pitney Bowes meter – CSP',category:'AP',recurrence:{type:'quarterly',qDay:'first'},site:'CSP',assignee:'',sopUrl:''},
+    {id:'q6',name:'Konica Minolta lease – CSP',category:'AP',recurrence:{type:'quarterly',qDay:'first'},site:'CSP',assignee:'',sopUrl:''},
+    {id:'q7',name:'Insurance premiums – CSP',category:'AP',recurrence:{type:'quarterly',qDay:'first'},site:'CSP',assignee:'',sopUrl:''},
+    {id:'a1',name:'Annual vendor contract reviews – CSL2',category:'Vendor Management',recurrence:{type:'annually',annualMonth:0,annualDay:1},site:'CSL2',assignee:'Lee',sopUrl:''},
+    {id:'a2',name:'Annual license renewals – CSL2',category:'Compliance',recurrence:{type:'annually',annualMonth:0,annualDay:1},site:'CSL2',assignee:'Lee',sopUrl:''},
+    {id:'a3',name:'Inventory worksheets – CSL2',category:'Inventory',recurrence:{type:'annually',annualMonth:0,annualDay:1},site:'CSL2',assignee:'Lee',sopUrl:''},
+    {id:'a4',name:'Annual vendor contract reviews – CSL1',category:'Vendor Management',recurrence:{type:'annually',annualMonth:0,annualDay:1},site:'CSL1',assignee:'Lee',sopUrl:''},
+    {id:'a5',name:'Annual license renewals – CSL1',category:'Compliance',recurrence:{type:'annually',annualMonth:0,annualDay:1},site:'CSL1',assignee:'Lee',sopUrl:''},
+    {id:'a6',name:'Inventory worksheets – CSL1',category:'Inventory',recurrence:{type:'annually',annualMonth:0,annualDay:1},site:'CSL1',assignee:'Lee',sopUrl:''},
+    {id:'a7',name:'Annual vendor contract reviews – CSP',category:'Vendor Management',recurrence:{type:'annually',annualMonth:0,annualDay:1},site:'CSP',assignee:'',sopUrl:''},
+    {id:'a8',name:'Bank corporate renewal / resolutions – CSP',category:'Treasury',recurrence:{type:'annually',annualMonth:0,annualDay:1},site:'CSP',assignee:'',sopUrl:''},
+    {id:'a9',name:'Equipment lease true-ups – CSP',category:'AP',recurrence:{type:'annually',annualMonth:0,annualDay:1},site:'CSP',assignee:'',sopUrl:''},
+    {id:'a10',name:'Annual business licenses – CSP',category:'Compliance',recurrence:{type:'annually',annualMonth:0,annualDay:1},site:'CSP',assignee:'',sopUrl:''},
+    {id:'a11',name:'Annual insurance renewals – CSP',category:'AP',recurrence:{type:'annually',annualMonth:0,annualDay:1},site:'CSP',assignee:'',sopUrl:''},
+    {id:'a12',name:'MassTaxConnect annual filings – CSP',category:'Tax',recurrence:{type:'annually',annualMonth:0,annualDay:15},site:'CSP',assignee:'',sopUrl:''},
+    {id:'a13',name:'CPA year-end package – CSP',category:'Reporting',recurrence:{type:'annually',annualMonth:2,annualDay:15},site:'CSP',assignee:'',sopUrl:''},
+    {id:'a14',name:'Inventory worksheets – CSP',category:'Inventory',recurrence:{type:'annually',annualMonth:0,annualDay:1},site:'CSP',assignee:'',sopUrl:''},
+    {id:'a15',name:'W-2 processing – CSP',category:'Compliance',recurrence:{type:'annually',annualMonth:0,annualDay:31},site:'CSP',assignee:'',sopUrl:''},
+    {id:'a16',name:'1099 preparation & filing – CSP',category:'Compliance',recurrence:{type:'annually',annualMonth:0,annualDay:31},site:'CSP',assignee:'',sopUrl:''},
+  ];
+  await saveTasks();
+}
+
+// ── RENDER ───────────────────────────────────────────────────
+function render(){
+  const app=document.getElementById('app');
+  app.innerHTML='';
+  // topbar
+  const tb=el('div',{class:'topbar'});
+  const ttl=el('div',{class:'app-title'});ttl.innerHTML='Ops <span>Calendar</span>';
+  const sync=el('div',{class:'sync-status'});
+  const dot=el('div',{class:'sync-dot '+(state.syncStatus),id:'sync-dot'});
+  const stxt=el('span',{id:'sync-txt'},state.syncStatus==='ok'?'Synced':state.syncStatus==='syncing'?'Saving…':'Sync error');
+  sync.appendChild(dot);sync.appendChild(stxt);
+  tb.appendChild(ttl);tb.appendChild(sync);app.appendChild(tb);
+  // tabs
+  const tabBar=el('div',{class:'tab-bar'});
+  [['calendar','Calendar'],['tasks','Tasks'],['sops','SOP Library']].forEach(([id,lbl])=>{
+    const t=el('div',{class:'tab'+(state.activeTab===id?' active':'')},lbl);
+    t.onclick=()=>{state.activeTab=id;editingInline=null;render();};tabBar.appendChild(t);
+  });
+  app.appendChild(tabBar);
+  if(modalState){renderModal(app);return;}
+  const panel=el('div',{class:'panel'});
+  if(state.activeTab==='calendar')renderCal(panel);
+  if(state.activeTab==='tasks')renderTasks(panel);
+  if(state.activeTab==='sops')renderSops(panel);
+  app.appendChild(panel);
+}
+
+function renderCal(panel){
+  // header
+  const hdr=el('div',{class:'cal-header'});
+  hdr.appendChild(el('div',{class:'cal-title'},state.year+' — Daily Task Calendar'));
+  const nav=el('div',{class:'cal-nav'});
+  const py=el('button',{class:'btn-sm'},'← '+(state.year-1));py.onclick=()=>{state.year--;render();};
+  const ny=el('button',{class:'btn-sm'},(state.year+1)+' →');ny.onclick=()=>{state.year++;render();};
+  const ea=el('button',{class:'btn-sm'},'Expand all');ea.onclick=()=>{state.collapsedMonths=[];state.collapsedWeeks={};render();};
+  const ca=el('button',{class:'btn-sm'},'Collapse all');ca.onclick=()=>{state.collapsedMonths=MONTHS.map((_,i)=>i);state.collapsedWeeks={};render();};
+  [py,ny,ea,ca].forEach(b=>nav.appendChild(b));hdr.appendChild(nav);panel.appendChild(hdr);
+  // filters
+  const fs=el('div',{class:'filter-section'});
+  const sr=el('div',{class:'filter-row'});sr.appendChild(el('span',{class:'filter-label'},'Site'));
+  ['all','CSP','CSL1','CSL2'].forEach(s=>{
+    const c=el('div',{class:'chip'+(state.filterSite===s?' active':'')},s==='all'?'All':s);
+    c.onclick=()=>{state.filterSite=s;render();};sr.appendChild(c);
+  });
+  fs.appendChild(sr);
+  const cr=el('div',{class:'filter-row'});cr.appendChild(el('span',{class:'filter-label'},'Category'));
+  const ac=el('div',{class:'chip'+(state.filterCats.length===0?' active':'')},'All');
+  ac.onclick=()=>{state.filterCats=[];render();};cr.appendChild(ac);
+  [...new Set(state.tasks.map(t=>t.category))].sort().forEach(cat=>{
+    const active=state.filterCats.includes(cat);
+    const c=el('div',{class:'chip'+(active?' cat-active chip-'+CAT_KEY(cat):'')},cat);
+    c.onclick=()=>{state.filterCats=active?state.filterCats.filter(x=>x!==cat):[...state.filterCats,cat];render();};
+    cr.appendChild(c);
+  });
+  fs.appendChild(cr);panel.appendChild(fs);
+  if(state.filterCats.length>0){
+    const fi=el('div',{style:'font-size:11px;color:var(--text3);margin-bottom:8px'});
+    fi.textContent='Showing: '+state.filterCats.join(', ')+' — ';
+    const cl=el('span',{style:'cursor:pointer;text-decoration:underline;color:var(--accent)'},'clear');
+    cl.onclick=()=>{state.filterCats=[];render();};fi.appendChild(cl);panel.appendChild(fi);
+  }
+  // today summary
+  const today=new Date(),todayStr=ds(today);
+  const weeks=getWeeks(state.year);
+  const todayWeek=weeks.find(w=>w.days.some(d=>ds(d)===todayStr));
+  let tt=0,td=0;
+  if(todayWeek){
+    const tday=todayWeek.days.find(d=>ds(d)===todayStr);
+    if(tday)state.tasks.forEach(t=>{if(!passFilt(t))return;if(occurs(t,tday,todayWeek)){tt++;if(isComp(t.id,todayStr))td++;}});
+  }
+  if(state.year===today.getFullYear()&&tt>0){
+    const sb2=el('div',{class:'summary-bar'});
+    const sc=el('div',{class:'stat-card'});
+    sc.appendChild(el('div',{class:'stat-num'},td+'/'+tt));
+    sc.appendChild(el('div',{class:'stat-label'},"Today's tasks done"));
+    sb2.appendChild(sc);panel.appendChild(sb2);
+  }
+  // months
+  const byMonth={};weeks.forEach(w=>{if(!byMonth[w.month])byMonth[w.month]=[];byMonth[w.month].push(w);});
+  const cwn=getCurWeek(state.year);
+  Object.entries(byMonth).forEach(([mIdx,mWeeks])=>{
+    const m=parseInt(mIdx),collapsed=state.collapsedMonths.includes(m);
+    let mT=0,mD=0;
+    mWeeks.forEach(w=>w.days.forEach(day=>{
+      state.tasks.forEach(t=>{if(!passFilt(t))return;if(occurs(t,day,w)){mT++;if(isComp(t.id,ds(day)))mD++;}});
+    }));
+    const block=el('div',{class:'month-block'});
+    const mh=el('div',{class:'month-hdr'});
+    mh.appendChild(el('div',{class:'month-name'},MONTHS[m]+' '+state.year));
+    const meta=el('div',{class:'month-meta'});
+    if(mT>0){
+      meta.appendChild(el('span',{class:'prog-txt'},mD+'/'+mT));
+      const pw=el('div',{class:'prog-wrap'});pw.appendChild(el('div',{class:'prog-fill',style:`width:${Math.round(mD/mT*100)}%`}));meta.appendChild(pw);
+    }
+    meta.appendChild(el('span',{class:'chev'+(collapsed?'':' open')},'▾'));
+    mh.appendChild(meta);
+    mh.onclick=()=>{if(collapsed)state.collapsedMonths=state.collapsedMonths.filter(x=>x!==m);else state.collapsedMonths.push(m);render();};
+    block.appendChild(mh);
+    if(!collapsed){
+      mWeeks.forEach(week=>{
+        const wk='W'+state.year+'-'+week.num,wc=!!state.collapsedWeeks[wk],isCW=week.num===cwn;
+        let wT=0,wD=0;
+        week.days.forEach(day=>{state.tasks.forEach(t=>{if(!passFilt(t))return;if(occurs(t,day,week)){wT++;if(isComp(t.id,ds(day)))wD++;}});});
+        const wb=el('div',{class:'week-block'});
+        const wh=el('div',{class:'week-hdr'});
+        const wt=el('div',{class:'week-title'});
+        wt.appendChild(document.createTextNode(`Wk ${week.num} · ${fmt(week.start)} – ${fmt(week.end)}`));
+        if(isCW)wt.appendChild(el('span',{class:'now-badge'},'now'));
+        wh.appendChild(wt);
+        const wm=el('div',{class:'week-meta'});
+        if(wT>0){wm.appendChild(el('span',{class:'week-done'},wD+'/'+wT));const pw=el('div',{class:'prog-wrap',style:'width:36px'});pw.appendChild(el('div',{class:'prog-fill',style:`width:${Math.round(wD/wT*100)}%`}));wm.appendChild(pw);}
+        wm.appendChild(el('span',{class:'chev'+(wc?'':' open')},'▾'));
+        wh.appendChild(wm);wh.onclick=()=>{state.collapsedWeeks[wk]=!wc;render();};
+        wb.appendChild(wh);
+        if(!wc){
+          week.days.forEach(day=>{
+            const dstr=ds(day),di=day.getDay()===0?6:day.getDay()-1;
+            const isToday=dstr===todayStr&&state.year===today.getFullYear();
+            const raw=state.tasks.filter(t=>passFilt(t)&&occurs(t,day,week));
+            if(!raw.length)return;
+            const dayTasks=orderedDay(raw,dstr);
+            const dDone=dayTasks.filter(t=>isComp(t.id,dstr)).length;
+            const dsec=el('div',{class:'day-section'});
+            const dh=el('div',{class:'day-hdr'});
+            dh.appendChild(el('span',{class:'day-name',style:isToday?'color:var(--text);font-weight:500':''},DAYS[di]+(isToday?' · Today':'')));
+            dh.appendChild(el('span',{class:'day-date'},fmt(day)));
+            dh.appendChild(el('span',{class:'day-done'},dDone+'/'+dayTasks.length));
+            dsec.appendChild(dh);
+            const dt=el('div',{class:'day-tasks'});
+            dayTasks.forEach(t=>{
+              const isIE=editingInline&&editingInline.taskId===t.id&&editingInline.ctx==='day'&&editingInline.dstr===dstr;
+              if(isIE){dt.appendChild(buildIE(t,'day',dstr));return;}
+              const done=isComp(t.id,dstr);
+              const row=el('div',{class:'task-row',draggable:'true'});
+              // drag handle
+              const dh2=el('div',{class:'drag-handle',title:'Drag to reorder'});
+              const dd2=el('div',{class:'drag-dot-row'});for(let i=0;i<3;i++)dd2.appendChild(el('div',{class:'drag-dot'}));
+              const dd3=el('div',{class:'drag-dot-row'});for(let i=0;i<3;i++)dd3.appendChild(el('div',{class:'drag-dot'}));
+              dh2.appendChild(dd2);dh2.appendChild(dd3);row.appendChild(dh2);
+              // check
+              const chk=el('div',{class:'task-check'+(done?' checked':'')});
+              chk.onclick=(e)=>{e.stopPropagation();toggleCompletion(t.id,dstr).then(()=>render());};row.appendChild(chk);
+              // cat pill
+              row.appendChild(el('span',{class:'cat-pill c-'+CAT_KEY(t.category)},t.category));
+              row.appendChild(el('span',{class:'task-label'+(done?' done':'')},t.name));
+              if(t.assignee)row.appendChild(el('span',{class:'task-assignee'},t.assignee));
+              if(t.site)row.appendChild(el('span',{class:'task-site'},t.site));
+              // edit btn
+              const eb=el('button',{class:'task-edit-btn'},'Edit');
+              eb.onclick=(e)=>{e.stopPropagation();editingInline={taskId:t.id,ctx:'day',dstr};render();};row.appendChild(eb);
+              // SOP link
+              if(t.sopUrl){
+                const sb3=el('a',{class:'sop-btn',href:t.sopUrl,target:'_blank',rel:'noopener'},'SOP ↗');
+                sb3.onclick=e=>e.stopPropagation();row.appendChild(sb3);
+              }
+              // drag events
+              row.addEventListener('dragstart',e=>{dragState={taskId:t.id,dstr};row.classList.add('dragging');e.dataTransfer.effectAllowed='move';});
+              row.addEventListener('dragend',()=>{dragState=null;document.querySelectorAll('.drag-over').forEach(r=>r.classList.remove('drag-over'));row.classList.remove('dragging');});
+              row.addEventListener('dragover',e=>{e.preventDefault();if(dragState&&dragState.dstr===dstr&&dragState.taskId!==t.id){document.querySelectorAll('.drag-over').forEach(r=>r.classList.remove('drag-over'));row.classList.add('drag-over');}});
+              row.addEventListener('drop',e=>{
+                e.preventDefault();row.classList.remove('drag-over');
+                if(!dragState||dragState.dstr!==dstr||dragState.taskId===t.id)return;
+                let ord=[...(state.dayOrder[dstr]||dayTasks.map(x=>x.id))];
+                dayTasks.forEach(x=>{if(!ord.includes(x.id))ord.push(x.id);});
+                const fi=ord.indexOf(dragState.taskId),ti=ord.indexOf(t.id);
+                if(fi===-1||ti===-1)return;
+                ord.splice(fi,1);ord.splice(ti,0,dragState.taskId);
+                saveDayOrder(dstr,ord).then(()=>render());
+              });
+              dt.appendChild(row);
+            });
+            dsec.appendChild(dt);wb.appendChild(dsec);
+          });
+        }
+        block.appendChild(wb);
+      });
+    }
+    panel.appendChild(block);
+  });
+}
+
+function buildIE(task,ctx,dstr){
+  const wrap=el('div',{class:'ie-row'});
+  const ni=el('input',{type:'text',value:task.name});
+  const cs=el('select',{style:'font-size:11px'});ALL_CATS.forEach(c=>{const o=el('option',{value:c},c);if(task.category===c)o.selected=true;cs.appendChild(o);});
+  const ss=el('select',{style:'font-size:11px'});['CSP','CSL1','CSL2'].forEach(s=>{const o=el('option',{value:s},s);if(task.site===s)o.selected=true;ss.appendChild(o);});
+  const ai=el('input',{type:'text',value:task.assignee||'',placeholder:'Assignee',style:'max-width:80px'});
+  const si=el('input',{type:'text',value:task.sopUrl||'',placeholder:'Notion SOP URL (optional)',style:'min-width:200px'});
+  const sv=el('button',{class:'ie-save'},'Save');
+  sv.onclick=()=>{
+    const idx=state.tasks.findIndex(x=>x.id===task.id);
+    if(idx!==-1){state.tasks[idx]={...state.tasks[idx],name:ni.value.trim()||task.name,category:cs.value,site:ss.value,assignee:ai.value.trim(),sopUrl:si.value.trim()};}
+    saveTasks().then(()=>{editingInline=null;render();});
+  };
+  const cl=el('button',{class:'ie-cancel'},'Cancel');cl.onclick=()=>{editingInline=null;render();};
+  [ni,cs,ss,ai,si,sv,cl].forEach(x=>wrap.appendChild(x));
+  return wrap;
+}
+
+function renderTasks(panel){
+  const hdr=el('div',{class:'sec-hdr'});
+  hdr.appendChild(el('div',{class:'sec-title'},'All recurring tasks ('+state.tasks.length+')'));
+  const ab=el('button',{class:'btn-primary'},'+ Add task');ab.onclick=()=>{modalState={type:'addTask',data:{}};render();};hdr.appendChild(ab);
+  panel.appendChild(hdr);
+  panel.appendChild(el('div',{style:'font-size:11px;color:var(--text3);margin-bottom:12px'},'Use ▲ ▼ to set global default order. "Edit" for quick edits, "Full edit" to change recurrence.'));
+  const groups={daily:[],biweekly:[],monthly:[],quarterly:[],annually:[]};
+  state.tasks.forEach(t=>{const k=t.recurrence?.type||'monthly';if(groups[k])groups[k].push(t);else groups.monthly.push(t);});
+  const gLbls={daily:'Daily',biweekly:'Bi-weekly',monthly:'Monthly',quarterly:'Quarterly',annually:'Annual'};
+  Object.entries(groups).forEach(([key,tasks])=>{
+    if(!tasks.length)return;
+    panel.appendChild(el('div',{class:'group-lbl'},gLbls[key]+' — '+tasks.length));
+    tasks.forEach(t=>{
+      const gi=state.tasks.findIndex(x=>x.id===t.id);
+      const isIE=editingInline&&editingInline.taskId===t.id&&editingInline.ctx==='global';
+      if(isIE){panel.appendChild(buildIE(t,'global',null));return;}
+      const card=el('div',{class:'task-card'});
+      const ra=el('div',{style:'display:flex;flex-direction:column;gap:2px;flex-shrink:0'});
+      const up=el('button',{class:'btn-sm',style:'padding:2px 7px;font-size:11px'},'▲');
+      up.onclick=()=>{if(gi>0){[state.tasks[gi-1],state.tasks[gi]]=[state.tasks[gi],state.tasks[gi-1]];saveTasks().then(()=>render());}};
+      const dn=el('button',{class:'btn-sm',style:'padding:2px 7px;font-size:11px'},'▼');
+      dn.onclick=()=>{if(gi<state.tasks.length-1){[state.tasks[gi+1],state.tasks[gi]]=[state.tasks[gi],state.tasks[gi+1]];saveTasks().then(()=>render());}};
+      ra.appendChild(up);ra.appendChild(dn);card.appendChild(ra);
+      const info=el('div',{class:'task-card-info'});
+      info.appendChild(el('div',{class:'task-card-name'},t.name));
+      const bdg=el('div',{class:'badges'});
+      bdg.appendChild(el('span',{class:'badge c-'+CAT_KEY(t.category)},t.category));
+      bdg.appendChild(el('span',{class:'badge badge-gray'},t.site));
+      if(t.assignee)bdg.appendChild(el('span',{class:'badge badge-gray'},t.assignee));
+      if(t.sopUrl)bdg.appendChild(el('a',{class:'badge badge-gray',href:t.sopUrl,target:'_blank',rel:'noopener',style:'cursor:pointer;text-decoration:none'},'SOP ↗'));
+      info.appendChild(bdg);card.appendChild(info);
+      const acts=el('div',{class:'card-acts'});
+      const eb=el('button',{class:'btn-sm'},'Edit');eb.onclick=()=>{editingInline={taskId:t.id,ctx:'global',dstr:null};render();};
+      const fb=el('button',{class:'btn-sm'},'Full edit');fb.onclick=()=>{modalState={type:'addTask',data:{editing:gi}};render();};
+      const db=el('button',{class:'btn-danger'},'Del');
+      db.onclick=()=>{if(confirm('Delete "'+t.name+'"?')){
+        state.tasks=state.tasks.filter(x=>x.id!==t.id);
+        sb.from('tasks').delete().eq('id',t.id).then(()=>render());
+      }};
+      [eb,fb,db].forEach(b=>acts.appendChild(b));card.appendChild(acts);panel.appendChild(card);
+    });
+  });
+}
+
+function renderSops(panel){
+  const hdr=el('div',{class:'sec-hdr'});
+  hdr.appendChild(el('div',{class:'sec-title'},'SOP library'));
+  const ab=el('button',{class:'btn-primary'},'+ New SOP');ab.onclick=()=>{modalState={type:'addSop',data:{}};render();};hdr.appendChild(ab);
+  panel.appendChild(hdr);
+  const note=el('div',{style:'font-size:12px;color:var(--text2);background:var(--bg3);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:10px 14px;margin-bottom:14px'});
+  note.innerHTML='<strong>Linking Notion SOPs:</strong> In any task, click "Edit" and paste the Notion page URL into the SOP URL field. A "SOP ↗" button will appear on that task in the calendar, opening the Notion page directly.';
+  panel.appendChild(note);
+  if(!state.sops.length){
+    const es=el('div',{class:'empty-state'},'No SOPs yet.');
+    es.appendChild(el('p',{},'You can add lightweight SOPs here, or link tasks directly to Notion pages via the SOP URL field in each task.'));
+    panel.appendChild(es);return;
+  }
+  state.sops.forEach((sop,i)=>{
+    const card=el('div',{class:'sop-card'});
+    const sh=el('div',{class:'sop-card-hdr'});
+    const left=el('div',{style:'flex:1;min-width:0'});
+    left.appendChild(el('div',{class:'sop-name'},sop.name));
+    left.appendChild(el('span',{class:'badge c-'+CAT_KEY(sop.category),style:'margin-top:4px;display:inline-block'},sop.category));
+    if(sop.description)left.appendChild(el('div',{class:'sop-desc'},sop.description));
+    sh.appendChild(left);
+    const acts=el('div',{style:'display:flex;gap:6px'});
+    const eb=el('button',{class:'btn-sm'},'Edit');eb.onclick=()=>{modalState={type:'addSop',data:{editing:i}};render();};
+    const db=el('button',{class:'btn-danger'},'Del');db.onclick=()=>{
+      state.sops.splice(i,1);
+      sb.from('sops').delete().eq('id',sop.id).then(()=>render());
+    };
+    acts.appendChild(eb);acts.appendChild(db);sh.appendChild(acts);card.appendChild(sh);
+    if(sop.steps?.filter(s=>s).length){
+      const sd=el('div',{class:'sop-steps'});
+      sop.steps.filter(s=>s).forEach((s,si)=>{
+        const row=el('div',{class:'sop-step'});row.appendChild(el('span',{class:'sop-step-num'},(si+1)+'.'));row.appendChild(el('span',{},s));sd.appendChild(row);
+      });
+      card.appendChild(sd);
+    }
+    panel.appendChild(card);
+  });
+}
+
+// ── MODALS ───────────────────────────────────────────────────
+function renderModal(app){
+  const ov=el('div',{class:'modal-wrap'});ov.onclick=(e)=>{if(e.target===ov){modalState=null;render();}};
+  if(modalState.type==='addTask')renderAddTask(ov);
+  if(modalState.type==='addSop')renderAddSop(ov);
+  app.appendChild(ov);
+}
+
+function renderAddTask(ov){
+  const ed=modalState.data.editing!==undefined,ex=ed?state.tasks[modalState.data.editing]:null;
+  const m=el('div',{class:'modal'});
+  m.appendChild(el('div',{class:'modal-title'},ed?'Edit task':'New recurring task'));
+  m.appendChild(fg('Task name','tn','text',ex?.name||''));
+  m.appendChild(fg('Category','tc','select',ex?.category||'AP',null,ALL_CATS.map(c=>[c,c])));
+  m.appendChild(fg('Site','ts','select',ex?.site||'CSP',null,[['CSP','CSP'],['CSL1','CSL1'],['CSL2','CSL2']]));
+  const ag=el('div',{class:'form-group'});ag.appendChild(el('label',{class:'form-label'},'Assignee'));ag.appendChild(el('input',{type:'text',id:'ta',value:ex?.assignee||'',placeholder:'e.g. Lee'}));m.appendChild(ag);
+  const sg=el('div',{class:'form-group'});sg.appendChild(el('label',{class:'form-label'},'Notion SOP URL (optional)'));sg.appendChild(el('input',{type:'text',id:'tsop',value:ex?.sopUrl||'',placeholder:'https://notion.so/...'}));m.appendChild(sg);
+  m.appendChild(fg('Recurrence','tr2','select',ex?.recurrence?.type||'monthly',null,[['daily','Daily (weekdays)'],['weekly','Weekly'],['biweekly','Bi-weekly'],['monthly','Monthly'],['quarterly','Quarterly'],['annually','Annually']]));
+  const sub=el('div',{id:'rsub'});m.appendChild(sub);
+  function updSub(){
+    sub.innerHTML='';const t2=document.getElementById('tr2')?.value,r=ex?.recurrence||{};
+    if(t2==='monthly'){const g=el('div',{class:'form-group'});g.appendChild(el('label',{class:'form-label'},'Day of month'));const s=el('select',{id:'rmd'});[['1','1st'],['last','Last day'],['5','5th'],['10','10th'],['15','15th'],['20','20th'],['25','25th']].forEach(([v,l])=>{const o=el('option',{value:v},l);if(r.monthDay===v)o.selected=true;s.appendChild(o);});g.appendChild(s);sub.appendChild(g);}
+    if(t2==='quarterly'){const g=el('div',{class:'form-group'});g.appendChild(el('label',{class:'form-label'},'Quarter timing'));const s=el('select',{id:'rqd'});[['last','Last day'],['first','1st day']].forEach(([v,l])=>{const o=el('option',{value:v},l);if(r.qDay===v)o.selected=true;s.appendChild(o);});g.appendChild(s);sub.appendChild(g);}
+    if(t2==='annually'){const g=el('div',{class:'form-group'});g.appendChild(el('label',{class:'form-label'},'Month and day'));const row2=el('div',{style:'display:flex;gap:8px'});const ms=el('select',{id:'ram',style:'flex:2'});MONTHS.forEach((mn,mi)=>{const o=el('option',{value:mi},mn);if((r.annualMonth||0)==mi)o.selected=true;ms.appendChild(o);});const ds2=el('input',{type:'number',id:'rad',min:'1',max:'31',value:r.annualDay||'1',style:'flex:1'});row2.appendChild(ms);row2.appendChild(ds2);g.appendChild(row2);sub.appendChild(g);}
+    if(t2==='biweekly'){const g=el('div',{class:'form-group'});g.appendChild(el('label',{class:'form-label'},'Week parity'));const s=el('select',{id:'rbw'});[['1','Odd weeks'],['2','Even weeks']].forEach(([v,l])=>{const o=el('option',{value:v},l);if((r.offset||1)==v)o.selected=true;s.appendChild(o);});g.appendChild(s);sub.appendChild(g);}
+  }
+  setTimeout(()=>{const sel=document.getElementById('tr2');if(sel)sel.onchange=updSub;},50);setTimeout(updSub,60);
+  const acts=el('div',{class:'modal-acts'});
+  const cancel=el('button',{class:'btn-cancel'},'Cancel');cancel.onclick=()=>{modalState=null;render();};
+  const sv=el('button',{class:'btn-primary'},ed?'Save':'Add task');
+  sv.onclick=()=>{
+    const name=document.getElementById('tn')?.value?.trim();if(!name){alert('Name required');return;}
+    const rt=document.getElementById('tr2').value,rec={type:rt};
+    if(rt==='monthly')rec.monthDay=document.getElementById('rmd')?.value||'1';
+    if(rt==='quarterly')rec.qDay=document.getElementById('rqd')?.value||'last';
+    if(rt==='annually'){rec.annualMonth=parseInt(document.getElementById('ram')?.value)||0;rec.annualDay=parseInt(document.getElementById('rad')?.value)||1;}
+    if(rt==='biweekly')rec.offset=parseInt(document.getElementById('rbw')?.value)||1;
+    const task={id:ex?.id||Date.now().toString(),name,category:document.getElementById('tc').value,site:document.getElementById('ts').value,assignee:document.getElementById('ta')?.value?.trim()||'',sopUrl:document.getElementById('tsop')?.value?.trim()||'',recurrence:rec};
+    if(ed)state.tasks[modalState.data.editing]=task;else state.tasks.push(task);
+    saveTasks().then(()=>{modalState=null;render();});
+  };
+  acts.appendChild(cancel);acts.appendChild(sv);m.appendChild(acts);ov.appendChild(m);
+}
+
+function renderAddSop(ov){
+  const ed=modalState.data.editing!==undefined,ex=ed?state.sops[modalState.data.editing]:null;
+  const steps=ex?.steps?[...ex.steps]:[''];
+  const m=el('div',{class:'modal'});m.appendChild(el('div',{class:'modal-title'},ed?'Edit SOP':'New SOP'));
+  m.appendChild(fg('Name','sn','text',ex?.name||''));
+  m.appendChild(fg('Category','sc','select',ex?.category||'AP',null,ALL_CATS.map(c=>[c,c])));
+  const dg=el('div',{class:'form-group'});dg.appendChild(el('label',{class:'form-label'},'Description'));dg.appendChild(el('textarea',{id:'sd'},ex?.description||''));m.appendChild(dg);
+  const stg=el('div',{class:'form-group'});stg.appendChild(el('label',{class:'form-label'},'Checklist steps'));
+  const sl=el('div',{class:'steps-list',id:'sl'});
+  function rSteps(){sl.innerHTML='';steps.forEach((s,i)=>{const row2=el('div',{class:'step-row'});row2.appendChild(el('span',{class:'step-num-lbl'},(i+1)+'.'));const inp=el('input',{type:'text',value:s});inp.oninput=()=>steps[i]=inp.value;row2.appendChild(inp);const rb=el('button',{class:'btn-icon'},'×');rb.onclick=()=>{steps.splice(i,1);rSteps();};row2.appendChild(rb);sl.appendChild(row2);});const ab=el('button',{class:'add-step-btn'},'+ Add step');ab.onclick=()=>{steps.push('');rSteps();};sl.appendChild(ab);}
+  rSteps();stg.appendChild(sl);m.appendChild(stg);
+  const acts=el('div',{class:'modal-acts'});
+  const cancel=el('button',{class:'btn-cancel'},'Cancel');cancel.onclick=()=>{modalState=null;render();};
+  const sv=el('button',{class:'btn-primary'},ed?'Save':'Create');
+  sv.onclick=()=>{
+    const name=document.getElementById('sn')?.value?.trim();if(!name){alert('Name required');return;}
+    const sop={id:ex?.id||Date.now().toString(),name,category:document.getElementById('sc').value,description:document.getElementById('sd')?.value?.trim()||'',steps:steps.filter(s=>s.trim())};
+    if(ed)state.sops[modalState.data.editing]=sop;else state.sops.push(sop);
+    saveSops().then(()=>{modalState=null;render();});
+  };
+  acts.appendChild(cancel);acts.appendChild(sv);m.appendChild(acts);ov.appendChild(m);
+}
+
+// ── HELPERS ──────────────────────────────────────────────────
+function el(tag,attrs={},text=''){
+  const e=document.createElement(tag);
+  Object.entries(attrs).forEach(([k,v])=>{if(k==='class')e.className=v;else e.setAttribute(k,v);});
+  if(text)e.textContent=text;return e;
+}
+function fg(label,id,type,value,ph,options){
+  const g=el('div',{class:'form-group'});g.appendChild(el('label',{class:'form-label',for:id},label));
+  if(type==='select'){const s=el('select',{id});options.forEach(([v,l])=>{const o=el('option',{value:v},l);if(value===v)o.selected=true;s.appendChild(o);});g.appendChild(s);}
+  else{const a={id,type:'text'};if(ph)a.placeholder=ph;if(value)a.value=value;g.appendChild(el('input',a));}
+  return g;
+}
+
+// ── INIT ─────────────────────────────────────────────────────
+(async()=>{
+  await loadFromSupabase();
+  subscribeRealtime();
+  // default: collapse all months except current
+  state.collapsedMonths=MONTHS.map((_,i)=>i);
+  const cm=new Date().getMonth();
+  if(state.year===new Date().getFullYear())state.collapsedMonths=state.collapsedMonths.filter(m=>m!==cm);
+  document.getElementById('loading-screen').style.display='none';
+  document.getElementById('app').style.display='flex';
+  render();
+})();
+</script>
+</body>
+</html>
